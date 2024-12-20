@@ -29,25 +29,52 @@ function LawViewer({ content }: { content: any }) {
     return names[code] || code;
   };
 
+  const getLanguageFromRef = (reference: string | undefined) => {
+    if (!reference) return 'Unknown';
+    const parts = reference.split('/');
+    return parts[parts.length - 1] || 'Unknown';
+  };
+
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return 'Not specified';
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  if (!content?.data) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <p className="text-gray-500">No content available</p>
+      </div>
+    );
+  }
+
+  const title = content.included?.[0]?.attributes?.title?.['xsd:string'] || 'Untitled';
+  const shortTitle = content.included?.[0]?.attributes?.titleShort?.['xsd:string'];
+  const documentDate = content.data.attributes?.dateDocument?.['xsd:date'];
+  const entryInForceDate = content.data.attributes?.dateEntryInForce?.['xsd:date'];
+  const noLongerInForceDate = content.data.attributes?.dateNoLongerInForce?.['xsd:date'];
+
   return (
     <div className="space-y-6">
       {/* Title Section */}
       <div className="bg-white rounded-lg shadow-sm p-6">
-        <h2 className="text-2xl font-bold text-gray-900">
-          {content.included?.[0]?.attributes?.title?.['xsd:string'] || 'Untitled'}
-        </h2>
-        {content.included?.[0]?.attributes?.titleShort?.['xsd:string'] && (
+        <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+        {shortTitle && (
           <p className="text-gray-500 mt-1">
-            Short Title: {content.included[0].attributes.titleShort['xsd:string']}
+            Short Title: {shortTitle}
           </p>
         )}
         <div className="mt-4 flex items-center space-x-4">
-          {content.data.attributes.dateDocument?.['xsd:date'] && (
+          {documentDate && (
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-              📅 {new Date(content.data.attributes.dateDocument['xsd:date']).toLocaleDateString()}
+              📅 {formatDate(documentDate)}
             </span>
           )}
-          {content.data.attributes.dateNoLongerInForce ? (
+          {noLongerInForceDate ? (
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
               ⚠️ No Longer in Force
             </span>
@@ -67,26 +94,16 @@ function LawViewer({ content }: { content: any }) {
           <dl className="space-y-3">
             <div>
               <dt className="text-sm font-medium text-gray-500">Document Date</dt>
-              <dd className="mt-1 text-sm text-gray-900">
-                {content.data.attributes.dateDocument?.['xsd:date'] 
-                  ? new Date(content.data.attributes.dateDocument['xsd:date']).toLocaleDateString()
-                  : 'Not specified'}
-              </dd>
+              <dd className="mt-1 text-sm text-gray-900">{formatDate(documentDate)}</dd>
             </div>
             <div>
               <dt className="text-sm font-medium text-gray-500">Entry in Force</dt>
-              <dd className="mt-1 text-sm text-gray-900">
-                {content.data.attributes.dateEntryInForce?.['xsd:date']
-                  ? new Date(content.data.attributes.dateEntryInForce['xsd:date']).toLocaleDateString()
-                  : 'Not specified'}
-              </dd>
+              <dd className="mt-1 text-sm text-gray-900">{formatDate(entryInForceDate)}</dd>
             </div>
-            {content.data.attributes.dateNoLongerInForce && (
+            {noLongerInForceDate && (
               <div>
                 <dt className="text-sm font-medium text-gray-500">No Longer in Force Since</dt>
-                <dd className="mt-1 text-sm text-gray-900">
-                  {new Date(content.data.attributes.dateNoLongerInForce['xsd:date']).toLocaleDateString()}
-                </dd>
+                <dd className="mt-1 text-sm text-gray-900">{formatDate(noLongerInForceDate)}</dd>
               </div>
             )}
           </dl>
@@ -96,8 +113,8 @@ function LawViewer({ content }: { content: any }) {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Languages</h3>
           <div className="grid grid-cols-2 gap-3">
-            {content.included?.map((expr: any) => {
-              const langCode = expr.references?.language.split('/').pop();
+            {content.included?.filter(expr => expr?.references?.language).map((expr: any) => {
+              const langCode = getLanguageFromRef(expr.references?.language);
               const langName = getLanguageName(langCode);
               return (
                 <a
@@ -117,7 +134,7 @@ function LawViewer({ content }: { content: any }) {
       </div>
 
       {/* References */}
-      {content.data.references.isRealizedBy?.length > 0 && (
+      {content.data.references?.isRealizedBy?.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Related Documents</h3>
           <div className="grid gap-3">

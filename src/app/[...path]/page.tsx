@@ -1,20 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { use } from 'react';
 import { LawExplorer } from '@/components/LawExplorer';
 import { Sidebar } from '@/components/Sidebar';
 
-export default function Home() {
+export default function Page({ params }: { params: { path: string[] } }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [initialPath, setInitialPath] = useState('');
-
-  useEffect(() => {
-    // Get the initial path from the URL
-    const pathFromUrl = window.location.pathname.slice(1);
-    if (pathFromUrl) {
-      setInitialPath(pathFromUrl);
-    }
-  }, []);
+  const resolvedParams = use(params);
+  const path = resolvedParams.path || [];
 
   const handleSearch = () => {
     // TODO: Implement search functionality
@@ -45,9 +39,9 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <LawExplorer initialPath={initialPath} />
+          <LawExplorer initialPath={path.join('/')} />
         </div>
       </main>
     </div>
   );
-}
+} 
