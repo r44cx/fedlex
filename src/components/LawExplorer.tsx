@@ -15,6 +15,154 @@ interface DirectoryContents {
   items: DirectoryItem[];
 }
 
+function LawViewer({ content }: { content: any }) {
+  const [showSource, setShowSource] = useState(false);
+
+  const getLanguageName = (code: string) => {
+    const names: { [key: string]: string } = {
+      DEU: 'German',
+      FRA: 'French',
+      ITA: 'Italian',
+      ROH: 'Romansh',
+      ENG: 'English'
+    };
+    return names[code] || code;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Title Section */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {content.included?.[0]?.attributes?.title?.['xsd:string'] || 'Untitled'}
+        </h2>
+        {content.included?.[0]?.attributes?.titleShort?.['xsd:string'] && (
+          <p className="text-gray-500 mt-1">
+            Short Title: {content.included[0].attributes.titleShort['xsd:string']}
+          </p>
+        )}
+        <div className="mt-4 flex items-center space-x-4">
+          {content.data.attributes.dateDocument?.['xsd:date'] && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+              📅 {new Date(content.data.attributes.dateDocument['xsd:date']).toLocaleDateString()}
+            </span>
+          )}
+          {content.data.attributes.dateNoLongerInForce ? (
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+              ⚠️ No Longer in Force
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+              ✓ In Force
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Details Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Metadata */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Details</h3>
+          <dl className="space-y-3">
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Document Date</dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {content.data.attributes.dateDocument?.['xsd:date'] 
+                  ? new Date(content.data.attributes.dateDocument['xsd:date']).toLocaleDateString()
+                  : 'Not specified'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500">Entry in Force</dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {content.data.attributes.dateEntryInForce?.['xsd:date']
+                  ? new Date(content.data.attributes.dateEntryInForce['xsd:date']).toLocaleDateString()
+                  : 'Not specified'}
+              </dd>
+            </div>
+            {content.data.attributes.dateNoLongerInForce && (
+              <div>
+                <dt className="text-sm font-medium text-gray-500">No Longer in Force Since</dt>
+                <dd className="mt-1 text-sm text-gray-900">
+                  {new Date(content.data.attributes.dateNoLongerInForce['xsd:date']).toLocaleDateString()}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+
+        {/* Languages */}
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Languages</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {content.included?.map((expr: any) => {
+              const langCode = expr.references?.language.split('/').pop();
+              const langName = getLanguageName(langCode);
+              return (
+                <a
+                  key={expr.uri}
+                  href={expr.uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm font-medium text-gray-900 transition-colors"
+                >
+                  <span className="mr-2">🌐</span>
+                  {langName}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* References */}
+      {content.data.references.isRealizedBy?.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Related Documents</h3>
+          <div className="grid gap-3">
+            {content.data.references.isRealizedBy.map((ref: string) => (
+              <a
+                key={ref}
+                href={ref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-900 transition-colors"
+              >
+                <span className="mr-2">📄</span>
+                {ref.split('/').slice(-2).join('/')}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Collapsible Source */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <button
+          onClick={() => setShowSource(!showSource)}
+          className="flex items-center text-sm font-medium text-gray-600 hover:text-gray-900"
+        >
+          <svg
+            className={`w-5 h-5 mr-2 transform transition-transform ${showSource ? 'rotate-90' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          View Source JSON
+        </button>
+        {showSource && (
+          <pre className="mt-4 p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto text-sm">
+            {JSON.stringify(content, null, 2)}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function LawExplorer() {
   const [currentPath, setCurrentPath] = useState('');
   const [contents, setContents] = useState<DirectoryContents | null>(null);
@@ -107,69 +255,7 @@ export function LawExplorer() {
           </div>
         </div>
 
-        {content.data && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                {content.included?.[0]?.attributes?.title?.['xsd:string'] || 'Untitled'}
-              </h2>
-              {content.included?.[0]?.attributes?.titleShort?.['xsd:string'] && (
-                <p className="text-gray-500 mt-1">
-                  Short Title: {content.included[0].attributes.titleShort['xsd:string']}
-                </p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-2">Details</h3>
-                <dl className="space-y-2">
-                  <div>
-                    <dt className="text-sm text-gray-500">Document Date</dt>
-                    <dd>{content.data.attributes.dateDocument?.['xsd:date'] || 'Not specified'}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm text-gray-500">Entry in Force</dt>
-                    <dd>{content.data.attributes.dateEntryInForce?.['xsd:date'] || 'Not specified'}</dd>
-                  </div>
-                  {content.data.attributes.dateNoLongerInForce && (
-                    <div>
-                      <dt className="text-sm text-gray-500">No Longer in Force</dt>
-                      <dd>{content.data.attributes.dateNoLongerInForce['xsd:date']}</dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="text-lg font-semibold mb-2">Available Languages</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {content.included?.map((expr: any) => {
-                    const lang = expr.references?.language.split('/').pop();
-                    return (
-                      <a
-                        key={expr.uri}
-                        href={expr.uri}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-2 bg-white rounded-md text-sm text-indigo-600 hover:bg-indigo-50"
-                      >
-                        {lang}
-                      </a>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold mb-2">Source</h3>
-              <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">
-                {JSON.stringify(content, null, 2)}
-              </pre>
-            </div>
-          </div>
-        )}
+        {content.data && <LawViewer content={content} />}
       </div>
     );
   }
