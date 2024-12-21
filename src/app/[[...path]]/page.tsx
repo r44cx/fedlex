@@ -22,6 +22,8 @@ const LAW_BOOKS: LawBook[] = [
 export default function CatchAllPage({ params }: { params: { path?: string[] } }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBooks, setSelectedBooks] = useState<string[]>([]);
+  
+  // Handle path parameter, ensuring empty path works for root
   const path = params.path ? params.path.join('/') : '';
 
   const handleSearch = () => {

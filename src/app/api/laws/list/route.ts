@@ -9,18 +9,43 @@ interface DirectoryItem {
   content?: any;
 }
 
+// Sanitize path to prevent directory traversal
+function sanitizePath(unsafePath: string): string {
+  // Remove any attempts to traverse up directories and special characters
+  const cleanPath = unsafePath
+    .split('/')
+    .filter(segment => 
+      segment !== '..' && 
+      segment !== '.' && 
+      segment !== '' &&
+      !segment.includes('\\') && // prevent Windows path traversal
+      !/[<>:"|?*]/.test(segment) // prevent special characters
+    )
+    .join('/');
+  return cleanPath;
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const currentPath = searchParams.get('path') || '';
+  const rawPath = searchParams.get('path') || '';
   const action = searchParams.get('action') || 'list';
 
   try {
     const basePath = path.join(process.cwd(), '../eli');
+    const currentPath = sanitizePath(rawPath);
     const fullPath = path.join(basePath, currentPath);
 
-    // Ensure the path is within the eli directory
-    if (!fullPath.startsWith(basePath)) {
+    // Double-check path is within the eli directory
+    const resolvedPath = path.resolve(fullPath);
+    if (!resolvedPath.startsWith(path.resolve(basePath))) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+    }
+
+    // Verify the path exists
+    try {
+      await fs.access(fullPath);
+    } catch {
+      return NextResponse.json({ error: 'Path not found' }, { status: 404 });
     }
 
     if (action === 'read' && fullPath.endsWith('.json')) {

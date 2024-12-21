@@ -284,80 +284,87 @@ interface LawExplorerProps {
 export function LawExplorer({ initialPath = '' }: LawExplorerProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [currentPath, setCurrentPath] = useState('');
+  const [currentPath, setCurrentPath] = useState(initialPath);
   const [contents, setContents] = useState<DirectoryContents | null>(null);
-  const [selectedFile, setSelectedFile] = useState<DirectoryItem | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [selectedFile, setSelectedFile] = useState<LawDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isClient, setIsClient] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Handle client-side initialization
+  // Sanitize path to prevent directory traversal
+  const sanitizePath = (path: string): string => {
+    // Remove any attempts to traverse up directories
+    const cleanPath = path
+      .split('/')
+      .filter(segment => segment !== '..' && segment !== '.' && segment !== '')
+      .join('/');
+    return cleanPath;
+  };
+
   useEffect(() => {
-    setIsClient(true);
-    // Initialize with the provided path
-    if (initialPath) {
-      setCurrentPath(initialPath);
-      loadContent(initialPath);
+    if (initialPath.endsWith('.json')) {
+      loadFile(initialPath);
+    } else {
+      loadContent(initialPath || '');
     }
   }, [initialPath]);
 
-  // Load content based on current path
   const loadContent = async (path: string) => {
     try {
       setLoading(true);
-      setError(null);
-      
-      // Check if it's a file or directory
-      if (path.endsWith('.json')) {
-        const response = await fetch(`/api/laws/list?path=${encodeURIComponent(path)}&action=read`);
-        if (!response.ok) throw new Error(`Failed to read file: ${response.statusText}`);
-        const data = await response.json();
-        setSelectedFile({ type: 'file', name: path.split('/').pop() || '', path, content: data });
-        setContents(null);
-      } else {
-        const response = await fetch(`/api/laws/list?path=${encodeURIComponent(path)}`);
-        if (!response.ok) throw new Error(`Failed to fetch directory contents: ${response.statusText}`);
-        const data = await response.json();
-        setContents(data);
-        setSelectedFile(null);
-      }
-    } catch (error) {
-      console.error('Error loading content:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred');
-      setContents(null);
       setSelectedFile(null);
+      const sanitizedPath = sanitizePath(path);
+      const response = await fetch(`/api/laws/list?path=${encodeURIComponent(sanitizedPath)}`);
+      if (!response.ok) {
+        throw new Error('Failed to load content');
+      }
+      const data = await response.json();
+      setContents(data);
+      setCurrentPath(sanitizedPath);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load content');
+      console.error('Error loading content:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Navigation handlers
+  const loadFile = async (path: string) => {
+    try {
+      setLoading(true);
+      setContents(null);
+      const sanitizedPath = sanitizePath(path);
+      const response = await fetch(`/api/laws/list?path=${encodeURIComponent(sanitizedPath)}&action=read`);
+      if (!response.ok) {
+        throw new Error('Failed to load file');
+      }
+      const data = await response.json();
+      setSelectedFile(data);
+      setCurrentPath(sanitizedPath);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load file');
+      console.error('Error loading file:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFileClick = (item: DirectoryItem) => {
-    const newPath = item.path === '' ? '/' : `/${item.path}`;
-    router.push(newPath);
+    if (item.type === 'file') {
+      const sanitizedPath = sanitizePath(item.path);
+      router.push(`/${sanitizedPath}`);
+    } else {
+      const sanitizedPath = sanitizePath(item.path);
+      router.push(sanitizedPath ? `/${sanitizedPath}` : '/');
+    }
   };
 
   const handleBackClick = () => {
     const parentPath = currentPath.split('/').slice(0, -1).join('/');
-    router.push(parentPath ? `/${parentPath}` : '/');
+    const sanitizedPath = sanitizePath(parentPath);
+    router.push(sanitizedPath ? `/${sanitizedPath}` : '/');
   };
-
-  // Only render on client-side to avoid hydration issues
-  if (!isClient) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-      </div>
-    );
-  }
-
-  if (loading && !contents) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
