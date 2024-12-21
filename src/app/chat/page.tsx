@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
 
@@ -15,14 +15,17 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const initialQueryHandled = useRef(false);
 
   // Get initial query and selected books from URL
   useEffect(() => {
     const query = searchParams.get('query');
-    const books = searchParams.get('books')?.split(',') || [];
+    const books = searchParams.get('books')?.split(',').filter(Boolean) || [];
     const hasAttachments = searchParams.get('hasAttachments') === 'true';
 
-    if (query) {
+    // Only handle the URL query once
+    if (query && !initialQueryHandled.current) {
+      initialQueryHandled.current = true;
       handleInitialQuery(query, books, hasAttachments);
     }
   }, [searchParams]);

@@ -14,7 +14,9 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "postinstall": "prisma generate",
-    "import:laws": "tsx scripts/import-laws.ts"
+    "import:laws": "tsx scripts/import-laws.ts",
+    "reindex:meilisearch": "tsx scripts/reindex-meilisearch.ts",
+    "reindex:debug": "tsx scripts/reindex-debug.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",

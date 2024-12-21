@@ -18,12 +18,24 @@ const LAW_INDEX = 'laws';
 async function searchRelevantDocuments(query: string, selectedBooks: string[] = []) {
   const index = await meilisearch.index(LAW_INDEX);
   
-  // Search for relevant documents
+  // Search for relevant documents with more generous limits and better settings
   const searchResults = await index.search(query, {
-    limit: 5,
+    limit: 10,
     filter: selectedBooks.length > 0 
-      ? selectedBooks.map(book => `path LIKE "${book}/%"`).join(' OR ')
+      ? selectedBooks.map(book => `path IN ["${book}/*"]`).join(' OR ')
       : undefined,
+    attributesToRetrieve: ['path', 'title', 'content', 'language'],
+    attributesToHighlight: ['title', 'content', 'rawContent'],
+    attributesToCrop: ['content', 'rawContent'],
+    cropLength: 500,
+    showMatchesPosition: true
+  });
+
+  console.log('Search results:', {
+    query,
+    filter: searchResults.request?.filter,
+    hits: searchResults.hits.length,
+    estimatedTotalHits: searchResults.estimatedTotalHits,
   });
 
   // Get full documents from database
@@ -38,6 +50,7 @@ async function searchRelevantDocuments(query: string, selectedBooks: string[] = 
   return documents.map(doc => ({
     ...doc,
     relevanceScore: searchResults.hits.find(hit => hit.path === doc.path)?._score || 0,
+    highlights: searchResults.hits.find(hit => hit.path === doc.path)?._formatted || null,
   }));
 }
 
@@ -45,12 +58,17 @@ function formatDocumentForAI(doc: any) {
   const title = doc.title || 'Untitled';
   const content = doc.content;
   const language = doc.language || 'Unknown';
+  const highlights = doc.highlights?.content || '';
 
   return `
-Title: ${title}
+Document Title: ${title}
 Language: ${language}
-Path: ${doc.path}
-Content: ${JSON.stringify(content, null, 2)}
+Reference: ${doc.path}
+Relevance Score: ${doc.relevanceScore}
+
+Content Summary:
+${highlights || JSON.stringify(content, null, 2)}
+
 ---
 `;
 }
@@ -107,6 +125,7 @@ export async function POST(request: NextRequest) {
     const systemMessage = `You are a helpful Swiss legal assistant. Use the following law documents as context for answering the user's question. 
 Only use the information provided in the context. If you're not sure about something, say so.
 Always cite the specific laws or documents you're referencing in your answers.
+Your default language is German. Only if you detect the user is asking in a diffrent language respond in it. Only a few words dont count as a diffrent language.
 
 Context from Swiss Law Documents:
 ${relevantDocs.map(formatDocumentForAI).join('\n')}`;
