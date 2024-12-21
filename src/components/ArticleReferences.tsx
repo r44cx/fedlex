@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 
 interface ArticleReference {
   code: string;     // e.g., 'StGB'
@@ -14,6 +15,7 @@ interface Props {
 
 export function ArticleReferences({ message }: Props) {
   const [references, setReferences] = useState<ArticleReference[]>([]);
+  const [hoveredRef, setHoveredRef] = useState<string | null>(null);
 
   useEffect(() => {
     // Extract article references from the message
@@ -59,7 +61,6 @@ export function ArticleReferences({ message }: Props) {
   }
 
   function constructUrl(code: string, article: string): string {
-    // For now, we'll just construct a path that matches our expected URL structure
     const codeMap: Record<string, string> = {
       'STGB': 'sr/311.0',
       'ZGB': 'sr/210',
@@ -77,25 +78,104 @@ export function ArticleReferences({ message }: Props) {
   if (references.length === 0) return null;
 
   return (
-    <div className="w-64 bg-white border-l border-gray-200 p-4 overflow-y-auto">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Referenced Articles</h3>
-      <ol className="space-y-2">
-        {references.map((ref, index) => (
-          <li key={`${ref.code}-${ref.article}-${index}`} className="text-sm">
-            <Link
-              href={ref.url}
-              className="block p-2 hover:bg-gray-50 rounded transition-colors"
+    <motion.div
+      initial={{ x: 300, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: 300, opacity: 0 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className="w-64 bg-white border-l border-[#e5e5e5] p-4 overflow-y-auto shadow-lg"
+    >
+      <motion.h3 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="text-lg font-semibold text-[#0c387b] mb-4 flex items-center"
+      >
+        <motion.svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          className="h-5 w-5 mr-2"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          initial={{ rotate: -180 }}
+          animate={{ rotate: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </motion.svg>
+        Referenced Articles
+      </motion.h3>
+      <motion.ol 
+        className="space-y-2"
+        variants={{
+          show: {
+            transition: {
+              staggerChildren: 0.1
+            }
+          }
+        }}
+        initial="hidden"
+        animate="show"
+      >
+        {references.map((ref, index) => {
+          const refKey = `${ref.code}-${ref.article}`;
+          return (
+            <motion.li
+              key={`${refKey}-${index}`}
+              variants={{
+                hidden: { opacity: 0, x: 20 },
+                show: { opacity: 1, x: 0 }
+              }}
+              className="text-sm"
+              onMouseEnter={() => setHoveredRef(refKey)}
+              onMouseLeave={() => setHoveredRef(null)}
             >
-              <span className="font-medium">Art. {ref.article} {ref.code}</span>
-              {ref.title && (
-                <span className="block text-gray-600 mt-1">
-                  {ref.title}
-                </span>
-              )}
-            </Link>
-          </li>
-        ))}
-      </ol>
-    </div>
+              <Link
+                href={ref.url}
+                className="block p-2 rounded transition-all duration-200 relative"
+              >
+                <motion.div
+                  className="absolute inset-0 bg-[#f7f7f7] rounded"
+                  initial={false}
+                  animate={{
+                    opacity: hoveredRef === refKey ? 1 : 0
+                  }}
+                  transition={{ duration: 0.2 }}
+                />
+                <div className="relative">
+                  <motion.div
+                    className="flex items-center"
+                    whileHover={{ x: 5 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  >
+                    <span className="font-medium text-[#0c387b] group-hover:text-[#dc1f3d]">
+                      Art. {ref.article} {ref.code}
+                    </span>
+                    <motion.span
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ 
+                        opacity: hoveredRef === refKey ? 1 : 0,
+                        scale: hoveredRef === refKey ? 1 : 0.5
+                      }}
+                      className="ml-2 text-[#dc1f3d]"
+                    >
+                      →
+                    </motion.span>
+                  </motion.div>
+                  {ref.title && (
+                    <motion.span
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="block text-[#666666] mt-1"
+                    >
+                      {ref.title}
+                    </motion.span>
+                  )}
+                </div>
+              </Link>
+            </motion.li>
+          );
+        })}
+      </motion.ol>
+    </motion.div>
   );
 } 

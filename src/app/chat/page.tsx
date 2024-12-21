@@ -4,10 +4,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
 import { ArticleReferences } from '@/components/ArticleReferences';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  id?: string;
 }
 
 export default function ChatPage() {
@@ -17,6 +19,16 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const initialQueryHandled = useRef(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // Get initial query and selected books from URL
   useEffect(() => {
@@ -24,16 +36,23 @@ export default function ChatPage() {
     const books = searchParams.get('books')?.split(',').filter(Boolean) || [];
     const hasAttachments = searchParams.get('hasAttachments') === 'true';
 
-    // Only handle the URL query once
     if (query && !initialQueryHandled.current) {
       initialQueryHandled.current = true;
       handleInitialQuery(query, books, hasAttachments);
     }
   }, [searchParams]);
 
+  const simulateTyping = async (content: string) => {
+    setIsTyping(true);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Minimum typing time
+    setIsTyping(false);
+    return content;
+  };
+
   const handleInitialQuery = async (query: string, books: string[], hasAttachments: boolean) => {
     setIsLoading(true);
-    setMessages(prev => [...prev, { role: 'user', content: query }]);
+    const messageId = Date.now().toString();
+    setMessages(prev => [...prev, { role: 'user', content: query, id: messageId }]);
 
     try {
       const response = await fetch('/api/chat', {
@@ -42,7 +61,7 @@ export default function ChatPage() {
         body: JSON.stringify({
           message: query,
           selectedBooks: books,
-          sessionId: null, // New session
+          sessionId: null,
         }),
       });
 
@@ -50,12 +69,14 @@ export default function ChatPage() {
       
       const data = await response.json();
       setSessionId(data.sessionId);
-      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+      const typedMessage = await simulateTyping(data.message);
+      setMessages(prev => [...prev, { role: 'assistant', content: typedMessage, id: Date.now().toString() }]);
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Sorry, I encountered an error processing your request.' 
+        content: 'Sorry, I encountered an error processing your request.',
+        id: Date.now().toString()
       }]);
     } finally {
       setIsLoading(false);
@@ -67,9 +88,10 @@ export default function ChatPage() {
     if (!input.trim() || isLoading) return;
 
     const userMessage = input.trim();
+    const userMessageId = Date.now().toString();
     setInput('');
     setIsLoading(true);
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setMessages(prev => [...prev, { role: 'user', content: userMessage, id: userMessageId }]);
 
     try {
       const response = await fetch('/api/chat', {
@@ -84,12 +106,14 @@ export default function ChatPage() {
       if (!response.ok) throw new Error('Failed to get response');
       
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+      const typedMessage = await simulateTyping(data.message);
+      setMessages(prev => [...prev, { role: 'assistant', content: typedMessage, id: Date.now().toString() }]);
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Sorry, I encountered an error processing your request.' 
+        content: 'Sorry, I encountered an error processing your request.',
+        id: Date.now().toString()
       }]);
     } finally {
       setIsLoading(false);
@@ -97,43 +121,99 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-[#f7f7f7] flex">
       <Sidebar />
       <main className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 scroll-smooth">
           <div className="max-w-4xl mx-auto space-y-4">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`flex ${
-                  message.role === 'assistant' ? 'justify-start' : 'justify-end'
-                }`}
-              >
-                <div
-                  className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                    message.role === 'assistant'
-                      ? 'bg-white text-gray-800 shadow-sm'
-                      : 'bg-indigo-600 text-white'
+            <AnimatePresence mode="popLayout">
+              {messages.map((message) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className={`flex ${
+                    message.role === 'assistant' ? 'justify-start' : 'justify-end'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
-                </div>
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-white rounded-lg px-4 py-2 shadow-sm">
-                  <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+                  <motion.div
+                    initial={{ scale: 0.95 }}
+                    animate={{ scale: 1 }}
+                    className={`rounded-lg px-4 py-2 max-w-[80%] shadow-lg transform transition-all duration-200 hover:shadow-xl ${
+                      message.role === 'assistant'
+                        ? 'bg-white text-[#333333] border border-[#e5e5e5] hover:border-[#0c387b]'
+                        : 'bg-[#0c387b] text-white hover:bg-[#0c387b]/90'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  </motion.div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {(isLoading || isTyping) && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="flex justify-start"
+              >
+                <div className="bg-white rounded-lg px-6 py-3 shadow-lg border border-[#e5e5e5]">
+                  <div className="flex items-center space-x-3">
+                    <div className="flex space-x-1">
+                      <motion.div
+                        animate={{
+                          scale: [1, 1.2, 1],
+                          opacity: [0.5, 1, 0.5]
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        }}
+                        className="w-2 h-2 bg-[#dc1f3d] rounded-full"
+                      />
+                      <motion.div
+                        animate={{
+                          scale: [1, 1.2, 1],
+                          opacity: [0.5, 1, 0.5]
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                          delay: 0.2
+                        }}
+                        className="w-2 h-2 bg-[#dc1f3d] rounded-full"
+                      />
+                      <motion.div
+                        animate={{
+                          scale: [1, 1.2, 1],
+                          opacity: [0.5, 1, 0.5]
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                          delay: 0.4
+                        }}
+                        className="w-2 h-2 bg-[#dc1f3d] rounded-full"
+                      />
+                    </div>
+                    <span className="text-sm text-[#666666]">AI is typing...</span>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </div>
-        <div className="border-t bg-white p-4">
+        <motion.div 
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="border-t border-[#e5e5e5] bg-white p-4 shadow-lg"
+        >
           <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
             <div className="relative">
               <textarea
@@ -143,27 +223,31 @@ export default function ChatPage() {
                 placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
                 rows={3}
                 disabled={isLoading}
-                className="w-full p-4 pr-24 text-gray-800 bg-gray-50 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none placeholder-gray-500"
+                className="w-full p-4 pr-24 text-[#333333] bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-lg focus:ring-2 focus:ring-[#0c387b] focus:border-transparent resize-none placeholder-[#666666] transition-all duration-200"
               />
-              <button
+              <motion.button
                 type="submit"
                 disabled={isLoading}
-                className="absolute right-3 top-3 px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="absolute right-3 top-3 px-6 py-2 bg-[#dc1f3d] text-white rounded-md hover:bg-[#b01832] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
               >
                 Send
-              </button>
+              </motion.button>
             </div>
           </form>
-        </div>
+        </motion.div>
       </main>
-      {messages.length > 0 && (
-        <ArticleReferences 
-          message={messages[messages.length - 1].role === 'assistant' 
-            ? messages[messages.length - 1].content 
-            : ''
-          } 
-        />
-      )}
+      <AnimatePresence>
+        {messages.length > 0 && (
+          <ArticleReferences 
+            message={messages[messages.length - 1].role === 'assistant' 
+              ? messages[messages.length - 1].content 
+              : ''
+            } 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 } 

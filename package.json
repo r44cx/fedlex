@@ -23,6 +23,7 @@
     "clsx": "^2.1.1",
     "cron-parser": "^4.9.0",
     "cross-fetch": "^4.0.0",
+    "framer-motion": "^10.18.0",
     "meilisearch": "^0.46.0",
     "next": "15.1.2",
     "node-domexception": "^2.0.1",
