@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
+import { AdminNav } from '@/components/AdminNav';
 
 interface Assistant {
   id: string;
@@ -123,101 +124,104 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">Admin Settings</h1>
+      <div className="flex-1">
+        <AdminNav />
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="bg-white shadow-lg rounded-lg p-6">
+              <h1 className="text-3xl font-bold text-gray-900 mb-8">Admin Settings</h1>
 
-            {/* Create New Assistant */}
-            <div className="mb-12 bg-gray-50 p-6 rounded-lg">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Create New Assistant</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
-                  <input
-                    type="text"
-                    value={newAssistantName}
-                    onChange={(e) => setNewAssistantName(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="Assistant name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
-                  <textarea
-                    value={newAssistantDescription}
-                    onChange={(e) => setNewAssistantDescription(e.target.value)}
-                    rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="Assistant description"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">File Group</label>
-                  <select
-                    value={selectedGroup || ''}
-                    onChange={(e) => setSelectedGroup(e.target.value || null)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              {/* Create New Assistant */}
+              <div className="mb-12 bg-gray-50 p-6 rounded-lg">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Create New Assistant</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Name</label>
+                    <input
+                      type="text"
+                      value={newAssistantName}
+                      onChange={(e) => setNewAssistantName(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      placeholder="Assistant name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea
+                      value={newAssistantDescription}
+                      onChange={(e) => setNewAssistantDescription(e.target.value)}
+                      rows={3}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      placeholder="Assistant description"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">File Group</label>
+                    <select
+                      value={selectedGroup || ''}
+                      onChange={(e) => setSelectedGroup(e.target.value || null)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    >
+                      <option value="">Select a file group</option>
+                      {fileGroups.map(group => (
+                        <option key={group.id} value={group.id}>
+                          {group.name} ({(group.totalSize / 1024 / 1024).toFixed(2)} MB)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleCreateAssistant}
+                    disabled={isCreating || !selectedGroup || !newAssistantName}
+                    className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                   >
-                    <option value="">Select a file group</option>
-                    {fileGroups.map(group => (
-                      <option key={group.id} value={group.id}>
-                        {group.name} ({(group.totalSize / 1024 / 1024).toFixed(2)} MB)
-                      </option>
-                    ))}
-                  </select>
+                    {isCreating ? 'Creating...' : 'Create Assistant'}
+                  </button>
                 </div>
-                <button
-                  onClick={handleCreateAssistant}
-                  disabled={isCreating || !selectedGroup || !newAssistantName}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {isCreating ? 'Creating...' : 'Create Assistant'}
-                </button>
               </div>
-            </div>
 
-            {/* Existing Assistants */}
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Existing Assistants</h2>
-              <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                <ul className="divide-y divide-gray-200">
-                  {assistants.map(assistant => (
-                    <li key={assistant.id} className="px-6 py-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-medium text-gray-900">{assistant.name}</h3>
-                          <p className="text-sm text-gray-500">{assistant.description}</p>
-                          <div className="mt-2 text-sm text-gray-500">
-                            <p>Files: {assistant.files.length}</p>
-                            <p>Size: {(assistant.fileSize / 1024 / 1024).toFixed(2)} MB</p>
-                            <p>Last Updated: {new Date(assistant.lastUpdated).toLocaleString()}</p>
+              {/* Existing Assistants */}
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Existing Assistants</h2>
+                <div className="bg-white shadow overflow-hidden sm:rounded-md">
+                  <ul className="divide-y divide-gray-200">
+                    {assistants.map(assistant => (
+                      <li key={assistant.id} className="px-6 py-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-medium text-gray-900">{assistant.name}</h3>
+                            <p className="text-sm text-gray-500">{assistant.description}</p>
+                            <div className="mt-2 text-sm text-gray-500">
+                              <p>Files: {assistant.files.length}</p>
+                              <p>Size: {(assistant.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                              <p>Last Updated: {new Date(assistant.lastUpdated).toLocaleString()}</p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-3">
+                            <button
+                              onClick={() => handleUpdateAssistant(assistant.id)}
+                              disabled={assistant.status === 'updating'}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                            >
+                              {assistant.status === 'updating' ? 'Updating...' : 'Update'}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAssistant(assistant.id)}
+                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </div>
-                        <div className="flex space-x-3">
-                          <button
-                            onClick={() => handleUpdateAssistant(assistant.id)}
-                            disabled={assistant.status === 'updating'}
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                          >
-                            {assistant.status === 'updating' ? 'Updating...' : 'Update'}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteAssistant(assistant.id)}
-                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 } 

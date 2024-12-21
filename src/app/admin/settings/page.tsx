@@ -1,189 +1,345 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { AdminNav } from '@/components/AdminNav';
 import { Sidebar } from '@/components/Sidebar';
+import { toast } from 'sonner';
 
-interface Settings {
-  openaiApiKey?: string;
-  defaultModel: string;
-  maxTokens: number;
-  temperature: number;
-  systemPrompt: string;
-  lawGroups: {
-    id: string;
-    name: string;
-    enabled: boolean;
-  }[];
+interface SystemSettings {
+  indexing: {
+    batchSize: number;
+    maxConcurrentJobs: number;
+    retryAttempts: number;
+    retryDelay: number;
+  };
+  search: {
+    minScore: number;
+    maxResults: number;
+    highlightLength: number;
+    fuzzyDistance: number;
+  };
+  meilisearch: {
+    host: string;
+    apiKey: string;
+  };
 }
 
-export default function AdminSettingsPage() {
-  const [settings, setSettings] = useState<Settings>({
-    defaultModel: 'gpt-4-1106-preview',
-    maxTokens: 4000,
-    temperature: 0.7,
-    systemPrompt: 'You are a helpful Swiss law assistant. Answer questions based on the provided law documents.',
-    lawGroups: [
-      { id: 'zgb', name: 'Zivilgesetzbuch (ZGB)', enabled: true },
-      { id: 'or', name: 'Obligationenrecht (OR)', enabled: true },
-      { id: 'stgb', name: 'Strafgesetzbuch (StGB)', enabled: true },
-      { id: 'bgb', name: 'Bundesgesetz (BGB)', enabled: true },
-    ],
-  });
+export default function SettingsPage() {
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  useEffect(() => {
-    // Load settings from API
-    fetch('/api/admin/settings')
-      .then(res => res.json())
-      .then(data => setSettings(data))
-      .catch(error => console.error('Error loading settings:', error));
-  }, []);
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/admin/settings');
+      if (!response.ok) throw new Error('Failed to fetch settings');
+      const data = await response.json();
+      setSettings(data);
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+      toast.error('Failed to fetch settings');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const handleSave = async () => {
+  const handleSaveSettings = async () => {
+    if (!settings) return;
+
     setIsSaving(true);
-    setSaveStatus('idle');
-
     try {
       const response = await fetch('/api/admin/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(settings),
       });
 
       if (!response.ok) throw new Error('Failed to save settings');
       
-      setSaveStatus('success');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      toast.success('Settings saved successfully');
     } catch (error) {
       console.error('Error saving settings:', error);
-      setSaveStatus('error');
+      toast.error('Failed to save settings');
     } finally {
       setIsSaving(false);
     }
   };
 
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  if (isLoading || !settings) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex">
+        <Sidebar />
+        <div className="flex-1">
+          <AdminNav />
+          <main className="flex-1 overflow-auto">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-white shadow-lg rounded-lg p-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">Application Settings</h1>
-
-            {/* OpenAI Settings */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">OpenAI Configuration</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">API Key</label>
-                  <input
-                    type="password"
-                    value={settings.openaiApiKey || ''}
-                    onChange={(e) => setSettings(prev => ({ ...prev, openaiApiKey: e.target.value }))}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    placeholder="sk-..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Default Model</label>
-                  <select
-                    value={settings.defaultModel}
-                    onChange={(e) => setSettings(prev => ({ ...prev, defaultModel: e.target.value }))}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  >
-                    <option value="gpt-4-1106-preview">GPT-4 Turbo</option>
-                    <option value="gpt-4">GPT-4</option>
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                  </select>
-                </div>
+      <div className="flex-1">
+        <AdminNav />
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="bg-white shadow-lg rounded-lg p-6">
+              <div className="flex justify-between items-center mb-8">
+                <h1 className="text-3xl font-bold text-gray-900">System Settings</h1>
+                <button
+                  onClick={handleSaveSettings}
+                  disabled={isSaving}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
-            </div>
 
-            {/* Assistant Settings */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Assistant Configuration</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Max Tokens</label>
-                  <input
-                    type="number"
-                    value={settings.maxTokens}
-                    onChange={(e) => setSettings(prev => ({ ...prev, maxTokens: parseInt(e.target.value) }))}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Temperature</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value={settings.temperature}
-                    onChange={(e) => setSettings(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
-                    className="mt-1 block w-full"
-                  />
-                  <div className="mt-1 text-sm text-gray-500">
-                    {settings.temperature} (Higher values make the output more creative)
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">System Prompt</label>
-                  <textarea
-                    value={settings.systemPrompt}
-                    onChange={(e) => setSettings(prev => ({ ...prev, systemPrompt: e.target.value }))}
-                    rows={4}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Law Groups */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Law Groups</h2>
-              <div className="space-y-4">
-                {settings.lawGroups.map((group) => (
-                  <div key={group.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={group.enabled}
-                      onChange={(e) => setSettings(prev => ({
-                        ...prev,
-                        lawGroups: prev.lawGroups.map(g =>
-                          g.id === group.id ? { ...g, enabled: e.target.checked } : g
-                        ),
-                      }))}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900">
-                      {group.name}
+              {/* Indexing Settings */}
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Indexing Settings</h2>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Batch Size
                     </label>
+                    <input
+                      type="number"
+                      value={settings.indexing.batchSize}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        indexing: {
+                          ...settings.indexing,
+                          batchSize: parseInt(e.target.value),
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Number of documents to process in each batch
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Save Button */}
-            <div className="flex items-center justify-end space-x-4">
-              {saveStatus === 'success' && (
-                <span className="text-green-600">Settings saved successfully!</span>
-              )}
-              {saveStatus === 'error' && (
-                <span className="text-red-600">Failed to save settings</span>
-              )}
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {isSaving ? 'Saving...' : 'Save Settings'}
-              </button>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Max Concurrent Jobs
+                    </label>
+                    <input
+                      type="number"
+                      value={settings.indexing.maxConcurrentJobs}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        indexing: {
+                          ...settings.indexing,
+                          maxConcurrentJobs: parseInt(e.target.value),
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Maximum number of jobs that can run simultaneously
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Retry Attempts
+                    </label>
+                    <input
+                      type="number"
+                      value={settings.indexing.retryAttempts}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        indexing: {
+                          ...settings.indexing,
+                          retryAttempts: parseInt(e.target.value),
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Number of times to retry failed operations
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Retry Delay (ms)
+                    </label>
+                    <input
+                      type="number"
+                      value={settings.indexing.retryDelay}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        indexing: {
+                          ...settings.indexing,
+                          retryDelay: parseInt(e.target.value),
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Delay between retry attempts in milliseconds
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Search Settings */}
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Search Settings</h2>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Minimum Score
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={settings.search.minScore}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        search: {
+                          ...settings.search,
+                          minScore: parseFloat(e.target.value),
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Minimum relevance score for search results
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Max Results
+                    </label>
+                    <input
+                      type="number"
+                      value={settings.search.maxResults}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        search: {
+                          ...settings.search,
+                          maxResults: parseInt(e.target.value),
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Maximum number of search results to return
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Highlight Length
+                    </label>
+                    <input
+                      type="number"
+                      value={settings.search.highlightLength}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        search: {
+                          ...settings.search,
+                          highlightLength: parseInt(e.target.value),
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Length of highlighted text snippets in results
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Fuzzy Distance
+                    </label>
+                    <input
+                      type="number"
+                      value={settings.search.fuzzyDistance}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        search: {
+                          ...settings.search,
+                          fuzzyDistance: parseInt(e.target.value),
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Maximum edit distance for fuzzy matching
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Meilisearch Settings */}
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Meilisearch Settings</h2>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Host
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.meilisearch.host}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        meilisearch: {
+                          ...settings.meilisearch,
+                          host: e.target.value,
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Meilisearch server URL
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={settings.meilisearch.apiKey}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        meilisearch: {
+                          ...settings.meilisearch,
+                          apiKey: e.target.value,
+                        },
+                      })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      Meilisearch API key for authentication
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 } 

@@ -1,0 +1,133 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SystemSettings {
+  id                  String   @id
+  indexingSettings    String   @db.Text
+  searchSettings      String   @db.Text
+  meilisearchSettings String   @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model IndexSchedule {
+  id             String     @id @default(cuid())
+  name           String
+  description    String
+  cronExpression String
+  type           IndexType
+  enabled        Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  lastRun        DateTime?
+  jobs           IndexJob[]
+
+  @@map("index_schedules")
+}
+
+model IndexJob {
+  id          String      @id @default(cuid())
+  scheduleId  String
+  schedule    IndexSchedule @relation(fields: [scheduleId], references: [id])
+  type        IndexType
+  status      JobStatus
+  startedAt   DateTime
+  completedAt DateTime?
+  error       String?
+  progress    Float?      @default(0)
+  totalItems  Int?
+  processed   Int?        @default(0)
+
+  @@map("index_jobs")
+}
+
+enum IndexType {
+  full
+  incremental
+}
+
+enum JobStatus {
+  pending
+  running
+  completed
+  failed
+  cancelled
+}
+
+model SearchIndex {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  enabled     Boolean  @default(true)
+  weight      Float    @default(1.0)
+  filters     Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastIndexed DateTime?
+
+  @@map("search_indexes")
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastIndexed DateTime?
+  status      DocumentStatus @default(pending)
+
+  @@map("documents")
+}
+
+enum DocumentStatus {
+  pending
+  indexed
+  failed
+  skipped
+}
+
+// CMS Models
+model ContentType {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String
+  fields      Json      // Array of ContentField objects
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  entries     Entry[]
+
+  @@map("content_types")
+}
+
+model Entry {
+  id            String      @id @default(cuid())
+  contentTypeId String
+  contentType   ContentType @relation(fields: [contentTypeId], references: [id])
+  data          Json        // Dynamic content based on content type fields
+  status        EntryStatus @default(draft)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  publishedAt   DateTime?
+  archivedAt    DateTime?
+
+  @@map("entries")
+}
+
+enum EntryStatus {
+  draft
+  published
+  archived
+} 
