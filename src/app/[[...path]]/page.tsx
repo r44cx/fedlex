@@ -1,14 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { use } from 'react';
 import { LawExplorer } from '@/components/LawExplorer';
 import { Sidebar } from '@/components/Sidebar';
 
-export default function Page({ params }: { params: { path: string[] } }) {
+export default function CatchAllPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const resolvedParams = use(params);
-  const path = resolvedParams.path || [];
 
   const handleSearch = () => {
     // TODO: Implement search functionality
@@ -39,7 +36,7 @@ export default function Page({ params }: { params: { path: string[] } }) {
               </button>
             </div>
           </div>
-          <LawExplorer initialPath={path.join('/')} />
+          <LawExplorer />
         </div>
       </main>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { LawDocument } from '@/types/law';
 
 interface DirectoryItem {
@@ -44,6 +45,18 @@ function LawViewer({ content }: { content: any }) {
     }
   };
 
+  const getFileIcon = (format: string) => {
+    const icons: { [key: string]: string } = {
+      'PDF': '📄',
+      'HTML': '🌐',
+      'DOCX': '📝',
+      'DOC': '📝',
+      'XML': '📋'
+    };
+    const formatKey = format.split('/').pop() || '';
+    return icons[formatKey] || '📎';
+  };
+
   if (!content?.data) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6">
@@ -68,7 +81,7 @@ function LawViewer({ content }: { content: any }) {
             Short Title: {shortTitle}
           </p>
         )}
-        <div className="mt-4 flex items-center space-x-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {documentDate && (
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
               📅 {formatDate(documentDate)}
@@ -83,6 +96,11 @@ function LawViewer({ content }: { content: any }) {
               ✓ In Force
             </span>
           )}
+          {content.data.type?.map((type: string) => (
+            <span key={type} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+              🏷️ {type}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -106,51 +124,130 @@ function LawViewer({ content }: { content: any }) {
                 <dd className="mt-1 text-sm text-gray-900">{formatDate(noLongerInForceDate)}</dd>
               </div>
             )}
+            {content.data.attributes?.basicAct?.['rdfs:Resource'] && (
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Basic Act</dt>
+                <dd className="mt-1 text-sm text-gray-900">
+                  <a 
+                    href={content.data.attributes.basicAct['rdfs:Resource']}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    View Basic Act
+                  </a>
+                </dd>
+              </div>
+            )}
           </dl>
         </div>
 
-        {/* Languages */}
+        {/* Languages and Documents */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Languages</h3>
-          <div className="grid grid-cols-2 gap-3">
-            {content.included?.filter(expr => expr?.references?.language).map((expr: any) => {
+          <div className="space-y-4">
+            {content.included?.filter((expr: any) => expr?.references?.language).map((expr: any) => {
               const langCode = getLanguageFromRef(expr.references?.language);
               const langName = getLanguageName(langCode);
               return (
-                <a
-                  key={expr.uri}
-                  href={expr.uri}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm font-medium text-gray-900 transition-colors"
-                >
-                  <span className="mr-2">🌐</span>
-                  {langName}
-                </a>
+                <div key={expr.uri} className="space-y-2">
+                  <h4 className="text-sm font-medium text-gray-900">{langName}</h4>
+                  {expr.attributes?.title?.['xsd:string'] && (
+                    <p className="text-sm text-gray-600">{expr.attributes.title['xsd:string']}</p>
+                  )}
+                </div>
               );
             })}
           </div>
         </div>
       </div>
 
-      {/* References */}
-      {content.data.references?.isRealizedBy?.length > 0 && (
+      {/* Consolidation Documents */}
+      {content.facets?.consolidates && (
         <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Related Documents</h3>
-          <div className="grid gap-3">
-            {content.data.references.isRealizedBy.map((ref: string) => (
-              <a
-                key={ref}
-                href={ref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-900 transition-colors"
-              >
-                <span className="mr-2">📄</span>
-                {ref.split('/').slice(-2).join('/')}
-              </a>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Consolidated Documents</h3>
+          <div className="space-y-6">
+            {content.facets.consolidates.map((consolidation: any, index: number) => (
+              <div key={consolidation.uri} className="border-b border-gray-200 pb-4 last:border-0 last:pb-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    📅 {formatDate(consolidation.dateDocument)}
+                  </span>
+                  {consolidation.memorialLabel && (
+                    <span className="text-sm text-gray-500">
+                      {consolidation.memorialLabel}
+                    </span>
+                  )}
+                </div>
+                {Object.entries(consolidation.expression || {}).map(([lang, data]: [string, any]) => (
+                  <div key={lang} className="ml-4 mt-2">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">
+                      {getLanguageName(getLanguageFromRef(lang))}
+                    </h4>
+                    {data.title && (
+                      <p className="text-sm text-gray-600 mb-2">{data.title}</p>
+                    )}
+                    {data.manifestation && (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {data.manifestation.map((manifest: any) => (
+                          <a
+                            key={manifest.uri}
+                            href={manifest.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium bg-gray-100 text-gray-900 hover:bg-gray-200 transition-colors"
+                          >
+                            {getFileIcon(manifest.format)} {manifest.format.split('/').pop()}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* References */}
+      {content.data.references && (
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">References</h3>
+          <dl className="space-y-4">
+            {Object.entries(content.data.references).map(([key, value]: [string, any]) => (
+              <div key={key}>
+                <dt className="text-sm font-medium text-gray-900">{key}</dt>
+                <dd className="mt-1 text-sm text-gray-600">
+                  {Array.isArray(value) ? (
+                    <ul className="list-disc list-inside space-y-1">
+                      {value.map((item: string) => (
+                        <li key={item}>
+                          <a
+                            href={item}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {item}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <a
+                      href={value}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      {value}
+                    </a>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
       )}
 
@@ -171,7 +268,7 @@ function LawViewer({ content }: { content: any }) {
           View Source JSON
         </button>
         {showSource && (
-          <pre className="mt-4 p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto text-sm">
+          <pre className="mt-4 p-4 bg-gray-50 text-gray-800 rounded-lg overflow-auto text-sm border border-gray-200">
             {JSON.stringify(content, null, 2)}
           </pre>
         )}
@@ -181,55 +278,77 @@ function LawViewer({ content }: { content: any }) {
 }
 
 export function LawExplorer() {
+  const router = useRouter();
+  const pathname = usePathname();
   const [currentPath, setCurrentPath] = useState('');
   const [contents, setContents] = useState<DirectoryContents | null>(null);
   const [selectedFile, setSelectedFile] = useState<DirectoryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
+  // Handle client-side initialization
   useEffect(() => {
-    fetchContents(currentPath);
-  }, [currentPath]);
+    setIsClient(true);
+  }, []);
 
-  const fetchContents = async (path: string) => {
+  // Load content based on current path
+  const loadContent = async (path: string) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/laws/list?path=${encodeURIComponent(path)}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch directory contents');
+      
+      // Check if it's a file or directory
+      if (path.endsWith('.json')) {
+        const response = await fetch(`/api/laws/list?path=${encodeURIComponent(path)}&action=read`);
+        if (!response.ok) throw new Error(`Failed to read file: ${response.statusText}`);
+        const data = await response.json();
+        setSelectedFile({ type: 'file', name: path.split('/').pop() || '', path, content: data });
+      } else {
+        const response = await fetch(`/api/laws/list?path=${encodeURIComponent(path)}`);
+        if (!response.ok) throw new Error(`Failed to fetch directory contents: ${response.statusText}`);
+        const data = await response.json();
+        setContents(data);
+        setSelectedFile(null);
       }
-      const data = await response.json();
-      setContents(data);
-      setSelectedFile(null);
     } catch (error) {
-      console.error('Error fetching contents:', error);
+      console.error('Error loading content:', error);
       setError(error instanceof Error ? error.message : 'An error occurred');
+      setContents(null);
+      setSelectedFile(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileClick = async (item: DirectoryItem) => {
-    if (item.type === 'directory') {
-      setCurrentPath(item.path);
-    } else {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/laws/list?path=${encodeURIComponent(item.path)}&action=read`);
-        if (!response.ok) {
-          throw new Error('Failed to read file');
-        }
-        const data = await response.json();
-        setSelectedFile(data);
-      } catch (error) {
-        console.error('Error reading file:', error);
-        setError(error instanceof Error ? error.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    }
+  // Handle initial load and path changes
+  useEffect(() => {
+    if (!isClient) return;
+    
+    const path = pathname === '/' ? '' : pathname.slice(1);
+    setCurrentPath(path);
+    loadContent(path);
+  }, [pathname, isClient]);
+
+  // Navigation handlers
+  const handleFileClick = (item: DirectoryItem) => {
+    const newPath = item.path === '' ? '/' : `/${item.path}`;
+    router.push(newPath);
   };
+
+  const handleBackClick = () => {
+    const parentPath = currentPath.split('/').slice(0, -1).join('/');
+    router.push(parentPath ? `/${parentPath}` : '/');
+  };
+
+  // Only render on client-side to avoid hydration issues
+  if (!isClient) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
 
   if (loading && !contents) {
     return (
@@ -244,7 +363,7 @@ export function LawExplorer() {
       <div className="bg-white rounded-lg shadow-lg p-6 text-center">
         <p className="text-red-600 mb-4">{error}</p>
         <button
-          onClick={() => fetchContents(currentPath)}
+          onClick={() => loadContent(currentPath)}
           className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
         >
           Try Again
@@ -259,7 +378,7 @@ export function LawExplorer() {
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <button
-            onClick={() => setSelectedFile(null)}
+            onClick={handleBackClick}
             className="text-indigo-600 hover:text-indigo-800 flex items-center"
           >
             <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
