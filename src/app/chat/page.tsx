@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
+import { ArticleReferences } from '@/components/ArticleReferences';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -155,6 +156,14 @@ export default function ChatPage() {
           </form>
         </div>
       </main>
+      {messages.length > 0 && (
+        <ArticleReferences 
+          message={messages[messages.length - 1].role === 'assistant' 
+            ? messages[messages.length - 1].content 
+            : ''
+          } 
+        />
+      )}
     </div>
   );
 } 
