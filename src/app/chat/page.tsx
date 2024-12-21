@@ -238,13 +238,11 @@ export default function ChatPage() {
           </form>
         </motion.div>
       </main>
-      <AnimatePresence>
-        {messages.length > 0 && (
+      <AnimatePresence mode="wait">
+        {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && (
           <ArticleReferences 
-            message={messages[messages.length - 1].role === 'assistant' 
-              ? messages[messages.length - 1].content 
-              : ''
-            } 
+            key="article-references"
+            message={messages[messages.length - 1].content} 
           />
         )}
       </AnimatePresence>
