@@ -9,6 +9,7 @@ const navItems = [
   { name: 'Documents', href: '/admin/documents' },
   { name: 'Content Indexing', href: '/admin/indexing' },
   { name: 'Query Management', href: '/admin/queries' },
+  { name: 'Search Debug', href: '/admin/search-debug' },
   { name: 'CMS', href: '/admin/cms' },
   { name: 'Status', href: '/admin/status' },
   { name: 'Settings', href: '/admin/settings' },

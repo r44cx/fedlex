@@ -15,13 +15,15 @@ const openai = new OpenAI({
 
 const LAW_INDEX = 'laws';
 
-async function searchRelevantDocuments(query: string, selectedBooks: string[]) {
-  const index = await meilisearch.getIndex(LAW_INDEX);
+async function searchRelevantDocuments(query: string, selectedBooks: string[] = []) {
+  const index = await meilisearch.index(LAW_INDEX);
   
   // Search for relevant documents
   const searchResults = await index.search(query, {
     limit: 5,
-    filter: selectedBooks.length > 0 ? `path IN [${selectedBooks.map(b => `"${b}"`).join(',')}]` : undefined,
+    filter: selectedBooks.length > 0 
+      ? selectedBooks.map(book => `path LIKE "${book}/%"`).join(' OR ')
+      : undefined,
   });
 
   // Get full documents from database
@@ -35,8 +37,22 @@ async function searchRelevantDocuments(query: string, selectedBooks: string[]) {
 
   return documents.map(doc => ({
     ...doc,
-    relevanceScore: searchResults.hits.find(hit => hit.path === doc.path)._score,
+    relevanceScore: searchResults.hits.find(hit => hit.path === doc.path)?._score || 0,
   }));
+}
+
+function formatDocumentForAI(doc: any) {
+  const title = doc.title || 'Untitled';
+  const content = doc.content;
+  const language = doc.language || 'Unknown';
+
+  return `
+Title: ${title}
+Language: ${language}
+Path: ${doc.path}
+Content: ${JSON.stringify(content, null, 2)}
+---
+`;
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +62,11 @@ export async function POST(request: NextRequest) {
     // Get or create chat session
     let session = sessionId
       ? await prisma.chatSession.findUnique({ where: { id: sessionId } })
-      : await prisma.chatSession.create({ data: {} });
+      : await prisma.chatSession.create({ 
+          data: { 
+            title: message.slice(0, 100) // Use first 100 chars of message as title
+          } 
+        });
 
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
@@ -62,23 +82,20 @@ export async function POST(request: NextRequest) {
     });
 
     // Search for relevant documents
+    console.log('Searching for relevant documents...');
     const relevantDocs = await searchRelevantDocuments(message, selectedBooks);
+    console.log(`Found ${relevantDocs.length} relevant documents`);
 
     // Create context links
-    await prisma.chatContext.createMany({
-      data: relevantDocs.map(doc => ({
-        sessionId: session.id,
-        documentId: doc.id,
-        relevanceScore: doc.relevanceScore,
-      })),
-    });
-
-    // Prepare context for AI
-    const context = relevantDocs.map(doc => `
-Title: ${doc.title}
-Content: ${JSON.stringify(doc.content)}
----
-`).join('\n');
+    if (relevantDocs.length > 0) {
+      await prisma.chatContext.createMany({
+        data: relevantDocs.map(doc => ({
+          sessionId: session.id,
+          documentId: doc.id,
+          relevanceScore: doc.relevanceScore,
+        })),
+      });
+    }
 
     // Get chat history
     const history = await prisma.chatMessage.findMany({
@@ -86,16 +103,22 @@ Content: ${JSON.stringify(doc.content)}
       orderBy: { createdAt: 'asc' },
     });
 
+    // Prepare system message with context
+    const systemMessage = `You are a helpful Swiss legal assistant. Use the following law documents as context for answering the user's question. 
+Only use the information provided in the context. If you're not sure about something, say so.
+Always cite the specific laws or documents you're referencing in your answers.
+
+Context from Swiss Law Documents:
+${relevantDocs.map(formatDocumentForAI).join('\n')}`;
+
     // Generate AI response
+    console.log('Generating AI response...');
     const completion = await openai.chat.completions.create({
       model: "gpt-4-1106-preview",
       messages: [
         {
           role: "system",
-          content: `You are a helpful legal assistant. Use the following law documents as context for answering the user's question. Only use the information provided in the context. If you're not sure about something, say so.
-
-Context:
-${context}`,
+          content: systemMessage,
         },
         ...history.map(msg => ({
           role: msg.role as any,

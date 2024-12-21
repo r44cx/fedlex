@@ -5,65 +5,53 @@ import { useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
-}
-
-interface RelevantLaw {
-  id: string;
-  title: string;
-  book: string;
 }
 
 export default function ChatPage() {
   const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [relevantLaws, setRelevantLaws] = useState<RelevantLaw[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
-  // Handle initial context from URL
+  // Get initial query and selected books from URL
   useEffect(() => {
-    const context = searchParams.get('context');
-    const title = searchParams.get('title');
-    if (context && title) {
-      setMessages([{
-        role: 'user',
-        content: `I want to know more about ${title}. Please explain it to me.`
-      }]);
-      handleChat(`I want to know more about ${title}. Please explain it to me.`, true);
+    const query = searchParams.get('query');
+    const books = searchParams.get('books')?.split(',') || [];
+    const hasAttachments = searchParams.get('hasAttachments') === 'true';
+
+    if (query) {
+      handleInitialQuery(query, books, hasAttachments);
     }
   }, [searchParams]);
 
-  const handleChat = async (message: string, isInitial = false) => {
-    if (!message.trim() || (isLoading && !isInitial)) return;
-
-    if (!isInitial) {
-      setMessages(prev => [...prev, { role: 'user', content: message }]);
-    }
+  const handleInitialQuery = async (query: string, books: string[], hasAttachments: boolean) => {
     setIsLoading(true);
+    setMessages(prev => [...prev, { role: 'user', content: query }]);
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: message,
-          messages: [...messages, { role: 'user', content: message }],
-          context: searchParams.get('context'),
+          message: query,
+          selectedBooks: books,
+          sessionId: null, // New session
         }),
       });
 
       if (!response.ok) throw new Error('Failed to get response');
       
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response.text }]);
-      setRelevantLaws(data.relevantLaws);
+      setSessionId(data.sessionId);
+      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Sorry, I encountered an error while processing your request.' 
+        content: 'Sorry, I encountered an error processing your request.' 
       }]);
     } finally {
       setIsLoading(false);
@@ -74,38 +62,54 @@ export default function ChatPage() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const message = input;
+    const userMessage = input.trim();
     setInput('');
-    await handleChat(message);
+    setIsLoading(true);
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage,
+          sessionId,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to get response');
+      
+      const data = await response.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error processing your request.' 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <Sidebar />
-      <main className="flex-1 flex">
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                <svg className="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                </svg>
-                <p className="text-lg">Ask me anything about Swiss law</p>
-                <p className="text-sm mt-2">I'll find the relevant laws and help you understand them</p>
-              </div>
-            )}
+      <main className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="max-w-4xl mx-auto space-y-4">
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${
+                  message.role === 'assistant' ? 'justify-start' : 'justify-end'
+                }`}
               >
                 <div
-                  className={`max-w-2xl rounded-lg px-4 py-2 ${
-                    message.role === 'user'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white text-gray-900 shadow-sm'
+                  className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                    message.role === 'assistant'
+                      ? 'bg-white text-gray-800 shadow-sm'
+                      : 'bg-indigo-600 text-white'
                   }`}
                 >
                   <p className="whitespace-pre-wrap">{message.content}</p>
@@ -114,8 +118,8 @@ export default function ChatPage() {
             ))}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-white text-gray-900 rounded-lg px-4 py-2 shadow-sm">
-                  <div className="flex items-center space-x-2">
+                <div className="bg-white rounded-lg px-4 py-2 shadow-sm">
+                  <div className="flex space-x-2">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
@@ -124,47 +128,28 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-
-          {/* Input Area */}
-          <div className="border-t bg-white p-4">
-            <form onSubmit={handleSubmit} className="flex space-x-4">
-              <input
-                type="text"
+        </div>
+        <div className="border-t bg-white p-4">
+          <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
+            <div className="relative">
+              <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about Swiss law..."
-                className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit(e))}
+                placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
+                rows={3}
                 disabled={isLoading}
+                className="w-full p-4 pr-24 text-gray-800 bg-gray-50 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none placeholder-gray-500"
               />
               <button
                 type="submit"
                 disabled={isLoading}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                className="absolute right-3 top-3 px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Send
               </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Relevant Laws Sidebar */}
-        <div className="w-80 border-l bg-white overflow-y-auto">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Relevant Laws</h2>
-            <div className="space-y-3">
-              {relevantLaws.map((law) => (
-                <div key={law.id} className="p-3 bg-gray-50 rounded-lg">
-                  <h3 className="font-medium text-gray-900">{law.title}</h3>
-                  <p className="text-sm text-gray-500">{law.book}</p>
-                </div>
-              ))}
-              {relevantLaws.length === 0 && (
-                <p className="text-sm text-gray-500">
-                  No relevant laws found yet. Start a conversation to see related laws.
-                </p>
-              )}
             </div>
-          </div>
+          </form>
         </div>
       </main>
     </div>
