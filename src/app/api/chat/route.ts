@@ -1,105 +1,135 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+import { MeiliSearch } from 'meilisearch';
 import OpenAI from 'openai';
-import { promises as fs } from 'fs';
-import path from 'path';
+
+const prisma = new PrismaClient();
+const meilisearch = new MeiliSearch({
+  host: process.env.MEILI_HOST || 'http://localhost:7700',
+  apiKey: process.env.MEILI_MASTER_KEY,
+});
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
+const LAW_INDEX = 'laws';
+
+async function searchRelevantDocuments(query: string, selectedBooks: string[]) {
+  const index = await meilisearch.getIndex(LAW_INDEX);
+  
+  // Search for relevant documents
+  const searchResults = await index.search(query, {
+    limit: 5,
+    filter: selectedBooks.length > 0 ? `path IN [${selectedBooks.map(b => `"${b}"`).join(',')}]` : undefined,
+  });
+
+  // Get full documents from database
+  const documents = await prisma.lawDocument.findMany({
+    where: {
+      path: {
+        in: searchResults.hits.map(hit => hit.path),
+      },
+    },
+  });
+
+  return documents.map(doc => ({
+    ...doc,
+    relevanceScore: searchResults.hits.find(hit => hit.path === doc.path)._score,
+  }));
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { query, messages } = await request.json();
+    const { message, sessionId, selectedBooks = [] } = await request.json();
 
-    // 1. Search for relevant laws
-    const searchResponse = await fetch(`${request.nextUrl.origin}/api/laws/index?q=${encodeURIComponent(query)}`);
-    if (!searchResponse.ok) throw new Error('Failed to search laws');
-    const relevantLaws = await searchResponse.json();
+    // Get or create chat session
+    let session = sessionId
+      ? await prisma.chatSession.findUnique({ where: { id: sessionId } })
+      : await prisma.chatSession.create({ data: {} });
 
-    // 2. Combine relevant law documents
-    const combinedContent: any[] = [];
-    for (const law of relevantLaws.slice(0, 10)) { // Limit to top 10 most relevant laws
-      const content = await fs.readFile(path.join(process.cwd(), law.path), 'utf-8');
-      combinedContent.push({
-        ...JSON.parse(content),
-        _index: {
-          id: law.id,
-          title: law.title,
-          book: law.book,
+    if (!session) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+
+    // Save user message
+    await prisma.chatMessage.create({
+      data: {
+        sessionId: session.id,
+        role: 'user',
+        content: message,
+      },
+    });
+
+    // Search for relevant documents
+    const relevantDocs = await searchRelevantDocuments(message, selectedBooks);
+
+    // Create context links
+    await prisma.chatContext.createMany({
+      data: relevantDocs.map(doc => ({
+        sessionId: session.id,
+        documentId: doc.id,
+        relevanceScore: doc.relevanceScore,
+      })),
+    });
+
+    // Prepare context for AI
+    const context = relevantDocs.map(doc => `
+Title: ${doc.title}
+Content: ${JSON.stringify(doc.content)}
+---
+`).join('\n');
+
+    // Get chat history
+    const history = await prisma.chatMessage.findMany({
+      where: { sessionId: session.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Generate AI response
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-1106-preview",
+      messages: [
+        {
+          role: "system",
+          content: `You are a helpful legal assistant. Use the following law documents as context for answering the user's question. Only use the information provided in the context. If you're not sure about something, say so.
+
+Context:
+${context}`,
         },
-      });
-    }
-
-    // 3. Create temporary file with combined content
-    const tempFilePath = path.join(process.cwd(), 'temp', `query-${Date.now()}.json`);
-    await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
-    await fs.writeFile(tempFilePath, JSON.stringify(combinedContent));
-
-    // 4. Upload file to OpenAI
-    const file = await openai.files.create({
-      file: await fs.readFile(tempFilePath),
-      purpose: 'assistants',
+        ...history.map(msg => ({
+          role: msg.role as any,
+          content: msg.content,
+        })),
+      ],
+      temperature: 0.7,
     });
 
-    // 5. Create temporary assistant
-    const assistant = await openai.beta.assistants.create({
-      name: `Temporary Assistant for: ${query}`,
-      description: 'Temporary assistant created for a specific query',
-      model: 'gpt-4-1106-preview',
-      file_ids: [file.id],
-      tools: [{ type: 'retrieval' }],
+    const aiResponse = completion.choices[0].message.content;
+
+    // Save AI response
+    await prisma.chatMessage.create({
+      data: {
+        sessionId: session.id,
+        role: 'assistant',
+        content: aiResponse,
+      },
     });
-
-    // 6. Create a thread
-    const thread = await openai.beta.threads.create();
-
-    // 7. Add messages to thread
-    for (const message of messages) {
-      await openai.beta.threads.messages.create(thread.id, {
-        role: message.role,
-        content: message.content,
-      });
-    }
-
-    // 8. Run assistant
-    const run = await openai.beta.threads.runs.create(thread.id, {
-      assistant_id: assistant.id,
-    });
-
-    // 9. Wait for completion
-    let response;
-    while (true) {
-      const runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-      if (runStatus.status === 'completed') {
-        const messages = await openai.beta.threads.messages.list(thread.id);
-        response = messages.data[0].content[0];
-        break;
-      } else if (runStatus.status === 'failed') {
-        throw new Error('Assistant run failed');
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // 10. Cleanup
-    await openai.files.del(file.id);
-    await openai.beta.assistants.del(assistant.id);
-    await fs.unlink(tempFilePath);
 
     return NextResponse.json({
-      response,
-      relevantLaws: relevantLaws.slice(0, 10).map((law: any) => ({
-        id: law.id,
-        title: law.title,
-        book: law.book,
+      sessionId: session.id,
+      message: aiResponse,
+      context: relevantDocs.map(doc => ({
+        title: doc.title,
+        path: doc.path,
+        relevanceScore: doc.relevanceScore,
       })),
     });
   } catch (error) {
-    console.error('Error in chat:', error);
-    return NextResponse.json({ error: 'Failed to process chat request' }, { status: 500 });
+    console.error('Chat error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process chat message' },
+      { status: 500 }
+    );
   }
 } 

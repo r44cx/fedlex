@@ -10,124 +10,59 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model SystemSettings {
-  id                  String   @id
-  indexingSettings    String   @db.Text
-  searchSettings      String   @db.Text
-  meilisearchSettings String   @db.Text
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  @@map("system_settings")
-}
-
-model IndexSchedule {
-  id             String     @id @default(cuid())
-  name           String
-  description    String
-  cronExpression String
-  type           IndexType
-  enabled        Boolean    @default(true)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  lastRun        DateTime?
-  jobs           IndexJob[]
-
-  @@map("index_schedules")
-}
-
-model IndexJob {
-  id          String      @id @default(cuid())
-  scheduleId  String
-  schedule    IndexSchedule @relation(fields: [scheduleId], references: [id])
-  type        IndexType
-  status      JobStatus
-  startedAt   DateTime
-  completedAt DateTime?
-  error       String?
-  progress    Float?      @default(0)
-  totalItems  Int?
-  processed   Int?        @default(0)
-
-  @@map("index_jobs")
-}
-
-enum IndexType {
-  full
-  incremental
-}
-
-enum JobStatus {
-  pending
-  running
-  completed
-  failed
-  cancelled
-}
-
-model SearchIndex {
+model LawDocument {
   id          String   @id @default(cuid())
-  name        String   @unique
-  description String
-  enabled     Boolean  @default(true)
-  weight      Float    @default(1.0)
-  filters     Json     @default("[]")
+  path        String   @unique // Original file path
+  title       String?
+  content     Json     // The entire JSON content
+  metadata    Json?    // Additional metadata
+  language    String?  // e.g., "DEU", "FRA", etc.
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  lastIndexed DateTime?
+  searchIndex String?  // Meilisearch document ID
 
-  @@map("search_indexes")
+  // Relations
+  chatContexts ChatContext[]
+
+  @@map("law_documents")
 }
 
-model Document {
-  id          String   @id @default(cuid())
-  title       String
-  content     String
-  metadata    Json     @default("{}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  lastIndexed DateTime?
-  status      DocumentStatus @default(pending)
+model ChatSession {
+  id        String   @id @default(cuid())
+  userId    String?  // Optional user identification
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("documents")
+  // Relations
+  contexts    ChatContext[]
+  messages    ChatMessage[]
+
+  @@map("chat_sessions")
 }
 
-enum DocumentStatus {
-  pending
-  indexed
-  failed
-  skipped
-}
-
-// CMS Models
-model ContentType {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  description String
-  fields      Json      // Array of ContentField objects
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  entries     Entry[]
-
-  @@map("content_types")
-}
-
-model Entry {
+model ChatContext {
   id            String      @id @default(cuid())
-  contentTypeId String
-  contentType   ContentType @relation(fields: [contentTypeId], references: [id])
-  data          Json        // Dynamic content based on content type fields
-  status        EntryStatus @default(draft)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  publishedAt   DateTime?
-  archivedAt    DateTime?
+  sessionId     String
+  documentId    String
+  relevanceScore Float?     // How relevant this document is to the query
+  
+  // Relations
+  session       ChatSession  @relation(fields: [sessionId], references: [id])
+  document      LawDocument  @relation(fields: [documentId], references: [id])
 
-  @@map("entries")
+  @@map("chat_contexts")
 }
 
-enum EntryStatus {
-  draft
-  published
-  archived
+model ChatMessage {
+  id          String      @id @default(cuid())
+  sessionId   String
+  role        String      // "user", "assistant", "system"
+  content     String      @db.Text
+  createdAt   DateTime    @default(now())
+  
+  // Relations
+  session     ChatSession @relation(fields: [sessionId], references: [id])
+
+  @@map("chat_messages")
 } 
