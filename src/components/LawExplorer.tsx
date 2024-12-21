@@ -277,7 +277,11 @@ function LawViewer({ content }: { content: any }) {
   );
 }
 
-export function LawExplorer() {
+interface LawExplorerProps {
+  initialPath?: string;
+}
+
+export function LawExplorer({ initialPath = '' }: LawExplorerProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [currentPath, setCurrentPath] = useState('');
@@ -290,7 +294,12 @@ export function LawExplorer() {
   // Handle client-side initialization
   useEffect(() => {
     setIsClient(true);
-  }, []);
+    // Initialize with the provided path
+    if (initialPath) {
+      setCurrentPath(initialPath);
+      loadContent(initialPath);
+    }
+  }, [initialPath]);
 
   // Load content based on current path
   const loadContent = async (path: string) => {
@@ -304,6 +313,7 @@ export function LawExplorer() {
         if (!response.ok) throw new Error(`Failed to read file: ${response.statusText}`);
         const data = await response.json();
         setSelectedFile({ type: 'file', name: path.split('/').pop() || '', path, content: data });
+        setContents(null);
       } else {
         const response = await fetch(`/api/laws/list?path=${encodeURIComponent(path)}`);
         if (!response.ok) throw new Error(`Failed to fetch directory contents: ${response.statusText}`);
@@ -320,15 +330,6 @@ export function LawExplorer() {
       setLoading(false);
     }
   };
-
-  // Handle initial load and path changes
-  useEffect(() => {
-    if (!isClient) return;
-    
-    const path = pathname === '/' ? '' : pathname.slice(1);
-    setCurrentPath(path);
-    loadContent(path);
-  }, [pathname, isClient]);
 
   // Navigation handlers
   const handleFileClick = (item: DirectoryItem) => {
@@ -373,7 +374,8 @@ export function LawExplorer() {
   }
 
   if (selectedFile) {
-    const content = selectedFile.content;
+    // Extract the actual content from the API response structure
+    const content = selectedFile.content?.content || selectedFile.content;
     return (
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
@@ -391,7 +393,7 @@ export function LawExplorer() {
           </div>
         </div>
 
-        {content.data && <LawViewer content={content} />}
+        {content && <LawViewer content={content} />}
       </div>
     );
   }

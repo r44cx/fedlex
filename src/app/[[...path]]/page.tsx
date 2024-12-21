@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { LawExplorer } from '@/components/LawExplorer';
 import { Sidebar } from '@/components/Sidebar';
 
-export default function CatchAllPage() {
+export default function CatchAllPage({ params }: { params: { path?: string[] } }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const path = params.path ? params.path.join('/') : '';
 
   const handleSearch = () => {
     // TODO: Implement search functionality
@@ -36,7 +37,7 @@ export default function CatchAllPage() {
               </button>
             </div>
           </div>
-          <LawExplorer />
+          <LawExplorer initialPath={path} />
         </div>
       </main>
     </div>
