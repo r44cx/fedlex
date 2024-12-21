@@ -374,7 +374,6 @@ export function LawExplorer({ initialPath = '' }: LawExplorerProps) {
   }
 
   if (selectedFile) {
-    // Extract the actual content from the API response structure
     const content = selectedFile.content?.content || selectedFile.content;
     return (
       <div className="bg-white rounded-lg shadow-lg p-6">
@@ -388,8 +387,22 @@ export function LawExplorer({ initialPath = '' }: LawExplorerProps) {
             </svg>
             Back to Directory
           </button>
-          <div className="text-sm text-gray-500">
-            {selectedFile.path}
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-500">
+              {selectedFile.path}
+            </div>
+            <button
+              onClick={() => {
+                const title = content.included?.[0]?.attributes?.title?.['xsd:string'] || 'this law';
+                router.push(`/chat?context=${encodeURIComponent(selectedFile.path)}&title=${encodeURIComponent(title)}`);
+              }}
+              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+              Chat about this law
+            </button>
           </div>
         </div>
 
