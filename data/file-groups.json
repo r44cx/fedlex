@@ -1,0 +1,20 @@
+[
+  {
+    "id": "zgb",
+    "name": "ZGB - Zivilgesetzbuch",
+    "files": [
+      "data/laws/zgb/*.json"
+    ],
+    "totalSize": 0,
+    "lastModified": "1970-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "or",
+    "name": "OR - Obligationenrecht",
+    "files": [
+      "data/laws/or/*.json"
+    ],
+    "totalSize": 0,
+    "lastModified": "1970-01-01T00:00:00.000Z"
+  }
+]
